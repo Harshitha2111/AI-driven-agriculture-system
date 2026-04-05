@@ -1,0 +1,82 @@
+/* Basic styles */
+body {
+  margin: 0;
+  font-family: 'Segoe UI', Arial, sans-serif;
+  background: #f4f6f8;
+  color: #222;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+h1, h2 {
+  font-weight: 700;
+}
+
+aside {
+  min-height: 100vh;
+  box-shadow: 2px 0 8px rgba(0,0,0,0.04);
+}
+
+nav button {
+  border-radius: 0 20px 20px 0;
+  margin-bottom: 2px;
+}
+
+main {
+  min-height: 100vh;
+}
+
+table {
+  background: #fff;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  overflow-x: auto;
+}
+
+th, td {
+  font-size: 15px;
+}
+
+button {
+  transition: background 0.2s, box-shadow 0.2s;
+}
+button:hover {
+  background: #f0f0f0;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+.feature-card {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  border-radius: 8px;
+  background: #fff;
+  margin: 18px 0;
+  padding: 20px;
+}
+
+@media (max-width: 900px) {
+  aside {
+    width: 100px !important;
+    min-width: 100px !important;
+  }
+  nav button {
+    font-size: 14px !important;
+    padding: 12px 8px !important;
+  }
+  main {
+    padding: 24px 2vw !important;
+  }
+}
+
+@media (max-width: 700px) {
+  .feature-card, #root > div, main {
+    padding: 8px !important;
+  }
+  table {
+    font-size: 13px;
+  }
+  aside {
+    display: none !important;
+  }
+}

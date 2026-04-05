@@ -15,7 +15,6 @@ A professional AI-driven agricultural market intelligence platform with a chat-b
 - npm
 
 ### Installation
-1. Clone or download the project files.
 2. Open your terminal in the project root directory.
 3. Install dependencies:
    ```bash
