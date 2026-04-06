@@ -1,5 +1,8 @@
 from fastapi import FastAPI, Request
+import requests
+from dotenv import load_dotenv
 app = FastAPI()
+load_dotenv()
 
 from pydantic import BaseModel
 # --- Input Models for POST endpoints ---
@@ -31,11 +34,69 @@ async def price_prediction_post(input: PricePredictionInput):
     # Example: return a simple prediction string
     return {"prediction": f"Predicted price for {input.commodity} in {input.market} on {input.date}: ₹2000/quintal."}
 
-# POST: Weather Advisory
+# POST: Weather Advisory (real data)
 @app.post("/api/weather-advisory")
 async def weather_advisory_post(input: WeatherAdvisoryInput):
-    # Example: return a simple advisory string
-    return {"advisory": f"Weather advisory for {input.location} on {input.date}: Light rain expected."}
+    """
+    Fetch tomorrow's weather forecast for the given location using OpenWeatherMap API.
+    input.location: city name (e.g., 'London,uk' or 'Hyderabad,IN')
+    input.date: not used (always returns tomorrow)
+    """
+    api_key = os.getenv("OPENWEATHER_API_KEY")
+    if not api_key:
+        return {"advisory": "API key not set on server."}
+    # Get city coordinates
+    geo_url = f"http://api.openweathermap.org/geo/1.0/direct"
+    geo_params = {"q": input.location, "limit": 1, "appid": api_key}
+    try:
+        geo_resp = requests.get(geo_url, params=geo_params, timeout=10)
+        geo_resp.raise_for_status()
+        geo_data = geo_resp.json()
+        if not geo_data:
+            return {"advisory": f"Location '{input.location}' not found."}
+        lat = geo_data[0]["lat"]
+        lon = geo_data[0]["lon"]
+        # Use 5-day/3-hour forecast API
+        url = f"https://api.openweathermap.org/data/2.5/forecast"
+        params = {
+            "lat": lat,
+            "lon": lon,
+            "appid": api_key,
+            "units": "metric"
+        }
+        resp = requests.get(url, params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        from datetime import datetime, timedelta
+        # Parse the requested date from input (format: YYYY-MM-DD)
+        try:
+            req_date = datetime.strptime(input.date, "%Y-%m-%d")
+        except Exception:
+            return {"advisory": "Invalid date format. Use YYYY-MM-DD."}
+        # Find the forecast closest to requested date at 12:00:00
+        target_time = datetime(req_date.year, req_date.month, req_date.day, 12, 0, 0)
+        closest = None
+        min_diff = timedelta(days=6)
+        for entry in data.get("list", []):
+            dt = datetime.utcfromtimestamp(entry["dt"])
+            diff = abs(dt - target_time)
+            if diff < min_diff:
+                min_diff = diff
+                closest = entry
+        if not closest or min_diff > timedelta(days=1):
+            return {"advisory": f"Weather data unavailable for {input.date}. (Only next 5 days supported)"}
+        desc = closest["weather"][0]["description"].capitalize()
+        temp = closest["main"]["temp"]
+        rain = closest.get("rain", {}).get("3h", 0)
+        dt_txt = closest["dt_txt"]
+        msg = f"Forecast for {input.location} on {dt_txt}: {desc}, Temp: {temp}°C, Rain: {rain}mm."
+        return {"advisory": msg}
+    except requests.Timeout:
+        return {"advisory": "Weather service timed out. Please try again later."}
+    except requests.RequestException as e:
+        return {"advisory": f"Weather service error: {str(e)}"}
+    except Exception as e:
+        return {"advisory": f"Unexpected error: {str(e)}"}
 
 # POST: Crop Info
 @app.post("/api/crop-info")

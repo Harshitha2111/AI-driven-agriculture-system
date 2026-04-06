@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { INDIAN_CITIES } from "./indianCities";
 
 // Types for all feature forms
 
@@ -66,7 +67,9 @@ function App() {
   const commodityOptions = ["Wheat", "Rice", "Maize", "Soybean"];
   const marketOptions = ["Delhi", "Mumbai", "Chennai", "Kolkata"];
   const cropOptions = ["Wheat", "Rice", "Maize", "Soybean"];
-  const locationOptions = ["Delhi", "Mumbai", "Chennai", "Kolkata"];
+  // Remove old locationOptions, use INDIAN_CITIES for autocomplete
+  const [cityQuery, setCityQuery] = useState("");
+  const [cityDropdown, setCityDropdown] = useState<string[]>(INDIAN_CITIES);
   const [marketResult, setMarketResult] = useState<string>("");
   const [marketPredicting, setMarketPredicting] = useState(false);
   const [marketPredictError, setMarketPredictError] = useState("");
@@ -128,8 +131,16 @@ function App() {
   const [weatherResult, setWeatherResult] = useState<string>("");
   const [weatherPredicting, setWeatherPredicting] = useState(false);
   const [weatherPredictError, setWeatherPredictError] = useState("");
-  const handleWeatherInput = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setWeatherInput({ ...weatherInput, [e.target.name]: e.target.value });
+  // Autocomplete handler for city input
+  const handleWeatherInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setWeatherInput({ ...weatherInput, [name]: value });
+    if (name === "location") {
+      setCityQuery(value);
+      setCityDropdown(
+        INDIAN_CITIES.filter(city => city.toLowerCase().includes(value.toLowerCase()))
+      );
+    }
   };
   const handleWeatherSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -409,13 +420,48 @@ function App() {
         {selectedFeature === "weather" && (
           <div className="feature-card" style={{ background: "#fff", borderRadius: 8, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", padding: 24 }}>
             <h2 style={{ marginTop: 0 }}>Weather Advisory</h2>
-            <form onSubmit={handleWeatherSubmit} style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
-              <label>
+            <form onSubmit={handleWeatherSubmit} style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", marginBottom: 12, position: "relative" }} autoComplete="off">
+              <label style={{ position: "relative" }}>
                 Location:
-                <select name="location" value={weatherInput.location} onChange={handleWeatherInput} required style={{ marginLeft: 4 }}>
-                  <option value="">Select</option>
-                  {locationOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                </select>
+                <input
+                  name="location"
+                  type="text"
+                  value={weatherInput.location}
+                  onChange={handleWeatherInput}
+                  autoComplete="off"
+                  required
+                  style={{ marginLeft: 4, width: 220 }}
+                  onFocus={() => setCityDropdown(INDIAN_CITIES.filter(city => city.toLowerCase().includes(weatherInput.location.toLowerCase())))}
+                />
+                {cityQuery && cityDropdown.length > 0 && (
+                  <ul style={{
+                    position: "absolute",
+                    zIndex: 10,
+                    background: "#fff",
+                    border: "1px solid #ccc",
+                    borderRadius: 4,
+                    margin: 0,
+                    padding: 0,
+                    listStyle: "none",
+                    width: 220,
+                    maxHeight: 180,
+                    overflowY: "auto"
+                  }}>
+                    {cityDropdown.map(city => (
+                      <li
+                        key={city}
+                        style={{ padding: "6px 12px", cursor: "pointer" }}
+                        onMouseDown={() => {
+                          setWeatherInput({ ...weatherInput, location: city });
+                          setCityQuery("");
+                          setCityDropdown([]);
+                        }}
+                      >
+                        {city}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </label>
               <label>
                 Date:
