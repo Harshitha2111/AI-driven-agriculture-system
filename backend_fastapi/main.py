@@ -1,8 +1,9 @@
 from fastapi import FastAPI, Request
 import requests
 from dotenv import load_dotenv
+import pathlib
 app = FastAPI()
-load_dotenv()
+load_dotenv(dotenv_path=pathlib.Path(__file__).parent.parent / ".env")
 
 from pydantic import BaseModel
 # --- Input Models for POST endpoints ---
