@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI, Request
 import requests
 from dotenv import load_dotenv
@@ -10,12 +11,10 @@ from pydantic import BaseModel
 class MarketAnalysisInput(BaseModel):
     commodity: str
     market: str
-    date: str
 
 class PricePredictionInput(BaseModel):
     commodity: str
     market: str
-    date: str
 
 class WeatherAdvisoryInput(BaseModel):
     location: str
@@ -24,16 +23,122 @@ class WeatherAdvisoryInput(BaseModel):
 class CropInfoInput(BaseModel):
     crop: str
 # POST: Market Analysis
+
+import pandas as pd
+import numpy as np
+
+
+# Load commodity price dataset
+DATA_PATH = os.path.join(os.path.dirname(__file__), "data", "commodity_price.csv")
+df_price = pd.read_csv(DATA_PATH)
+
+# Clean up column names for easier access
+df_price.columns = [c.strip().replace(" ", "_").replace("-", "_").replace("(", "").replace(")", "") for c in df_price.columns]
+
+# Get available commodities and markets
+available_commodities = sorted(df_price['Commodity'].dropna().unique())
+available_markets = sorted(df_price['Market'].dropna().unique())
+available_states = sorted(df_price['State'].dropna().unique())
+available_districts = sorted(df_price['District'].dropna().unique())
+
+# ML model for price prediction (train on Modal_Price)
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+
+# Prepare features: Commodity, Market, State, Variety, Date (as ordinal)
+df_model = df_price.dropna(subset=["Commodity", "Market", "Modal_x0020_Price"])
+le_commodity = LabelEncoder()
+le_market = LabelEncoder()
+le_state = LabelEncoder()
+le_variety = LabelEncoder()
+le_district = LabelEncoder()
+df_model = df_model.copy()
+df_model["Commodity_enc"] = le_commodity.fit_transform(df_model["Commodity"].astype(str))
+df_model["Market_enc"] = le_market.fit_transform(df_model["Market"].astype(str))
+df_model["State_enc"] = le_state.fit_transform(df_model["State"].astype(str))
+df_model["Variety_enc"] = le_variety.fit_transform(df_model["Variety"].astype(str))
+df_model["District_enc"] = le_district.fit_transform(df_model["District"].astype(str))
+import datetime
+def parse_date(d):
+    try:
+        return datetime.datetime.strptime(str(d), "%d/%m/%Y").toordinal()
+    except:
+        return 0
+df_model["Date_ordinal"] = df_model["Arrival_Date"].apply(parse_date)
+X = df_model[["Commodity_enc", "Market_enc", "State_enc", "Variety_enc", "District_enc", "Date_ordinal"]]
+y = df_model["Modal_x0020_Price"]
+model = RandomForestRegressor(n_estimators=50, random_state=42)
+model.fit(X, y)
+
+# Endpoint to get area-wise commodities, districts, and markets
+@app.get("/api/area-commodities")
+def get_area_commodities(state: str = None, district: str = None, market: str = None):
+    df = df_price.copy()
+    if state:
+        df = df[df['State'] == state]
+    districts = sorted(df['District'].dropna().unique())
+    if district:
+        df = df[df['District'] == district]
+    markets = sorted(df['Market'].dropna().unique())
+    if market:
+        df = df[df['Market'] == market]
+    commodities = sorted(df['Commodity'].dropna().unique())
+    return {"commodities": commodities, "districts": districts, "markets": markets}
+
 @app.post("/api/market-analysis")
 async def market_analysis_post(input: MarketAnalysisInput):
-    # Example: return a simple analysis string
-    return {"analysis": f"Market analysis for {input.commodity} in {input.market} on {input.date}: Stable."}
+    # Filter by commodity and market
+    df = df_price[(df_price['Commodity'] == input.commodity) & (df_price['Market'] == input.market)]
+    if df.empty:
+        return {"analysis": f"No data available for {input.commodity} in {input.market}."}
+    min_price = df['Min_x0020_Price'].mean()
+    max_price = df['Max_x0020_Price'].mean()
+    modal_price = df['Modal_x0020_Price'].mean()
+    count = len(df)
+    analysis = (
+        f"Market analysis for {input.commodity} in {input.market}: "
+        f"Avg Min Price ₹{min_price:.0f}, Avg Max Price ₹{max_price:.0f}, Avg Modal Price ₹{modal_price:.0f} (per quintal)"
+    )
+    return {"analysis": analysis}
+
+# Endpoint to get available commodities and markets
+@app.get("/api/available-areas")
+def get_areas():
+    return {
+        "commodities": available_commodities,
+        "markets": available_markets,
+        "states": available_states,
+        "districts": available_districts
+    }
 
 # POST: Price Prediction
 @app.post("/api/price-prediction")
 async def price_prediction_post(input: PricePredictionInput):
-    # Example: return a simple prediction string
-    return {"prediction": f"Predicted price for {input.commodity} in {input.market} on {input.date}: ₹2000/quintal."}
+    # Encode features for prediction
+    try:
+        c = input.commodity
+        m = input.market
+        df_row = df_price[(df_price['Commodity'] == c) & (df_price['Market'] == m)]
+        if df_row.empty:
+            return {"prediction": f"No data available for {c} in {m}."}
+        # Use first matching row for encoding
+        state = df_row.iloc[0]['State']
+        variety = df_row.iloc[0]['Variety']
+        district = df_row.iloc[0]['District']
+        date_ord = 0
+        X_pred = np.array([
+            le_commodity.transform([c])[0],
+            le_market.transform([m])[0],
+            le_state.transform([state])[0],
+            le_variety.transform([variety])[0],
+            le_district.transform([district])[0],
+            date_ord
+        ]).reshape(1, -1)
+        pred_price = model.predict(X_pred)[0]
+        return {"prediction": f"Predicted modal price for {c} in {m}: ₹{int(pred_price)}/quintal."}
+    except Exception as e:
+        return {"prediction": f"Prediction error: {str(e)}"}
 
 # POST: Weather Advisory (real data)
 @app.post("/api/weather-advisory")

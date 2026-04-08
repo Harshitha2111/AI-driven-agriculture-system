@@ -63,10 +63,86 @@ function FeatureCard({ title, data, loading, error, onRefresh }: FeatureCardProp
 
 function App() {
   // Market Analysis Form
-  const [marketInput, setMarketInput] = useState<MarketAnalysisInput>({ commodity: "", market: "", date: "" });
-  const commodityOptions = ["Wheat", "Rice", "Maize", "Soybean"];
-  const marketOptions = ["Delhi", "Mumbai", "Chennai", "Kolkata"];
-  const cropOptions = ["Wheat", "Rice", "Maize", "Soybean"];
+  const [marketInput, setMarketInput] = useState<MarketAnalysisInput>({ commodity: "", market: "" });
+  const [stateOptions, setStateOptions] = useState<string[]>([]);
+  const [districtOptions, setDistrictOptions] = useState<string[]>([]);
+  const [marketOptions, setMarketOptions] = useState<string[]>([]);
+  const [commodityOptions, setCommodityOptions] = useState<string[]>([]);
+  // Crop options for Crop Info should be all available crops from the dataset, not just those filtered by market analysis
+  const [cropOptions, setCropOptions] = useState<string[]>([]);
+
+  // Fetch all crops for Crop Info on mount
+  useEffect(() => {
+    fetch(`${API}/available-areas`)
+      .then(res => res.json())
+      .then(data => {
+        setCropOptions(data.commodities || []);
+      });
+  }, []);
+
+  // Area selection state
+  const [selectedState, setSelectedState] = useState("");
+  const [selectedDistrict, setSelectedDistrict] = useState("");
+  const [selectedMarket, setSelectedMarket] = useState("");
+
+
+  // Fetch all states on mount
+  useEffect(() => {
+    fetch(`${API}/available-areas`)
+      .then(res => res.json())
+      .then(data => {
+        setStateOptions(data.states || []);
+      });
+  }, []);
+
+  // Update districts when state changes
+  useEffect(() => {
+    if (selectedState) {
+      fetch(`${API}/area-commodities?state=${encodeURIComponent(selectedState)}`)
+        .then(res => res.json())
+        .then(data => {
+          setDistrictOptions(data.districts || []);
+          setSelectedDistrict("");
+          setMarketOptions([]);
+          setSelectedMarket("");
+          setCommodityOptions([]);
+        });
+    } else {
+      setDistrictOptions([]);
+      setSelectedDistrict("");
+      setMarketOptions([]);
+      setSelectedMarket("");
+      setCommodityOptions([]);
+    }
+  }, [selectedState]);
+
+  // Update markets when district changes
+  useEffect(() => {
+    if (selectedState && selectedDistrict) {
+      fetch(`${API}/area-commodities?state=${encodeURIComponent(selectedState)}&district=${encodeURIComponent(selectedDistrict)}`)
+        .then(res => res.json())
+        .then(data => {
+          setMarketOptions(data.markets || []);
+          setSelectedMarket("");
+          setCommodityOptions([]);
+        });
+    } else {
+      setMarketOptions([]);
+      setSelectedMarket("");
+      setCommodityOptions([]);
+    }
+  }, [selectedDistrict, selectedState]);
+
+  // Update commodities when market changes
+  useEffect(() => {
+    if (selectedState && selectedDistrict && selectedMarket) {
+      fetch(`${API}/area-commodities?state=${encodeURIComponent(selectedState)}&district=${encodeURIComponent(selectedDistrict)}&market=${encodeURIComponent(selectedMarket)}`)
+        .then(res => res.json())
+        .then(data => setCommodityOptions(data.commodities || []));
+    } else {
+      setCommodityOptions([]);
+    }
+  }, [selectedMarket, selectedDistrict, selectedState]);
   // Remove old locationOptions, use INDIAN_CITIES for autocomplete
   const [cityQuery, setCityQuery] = useState("");
   const [cityDropdown, setCityDropdown] = useState<string[]>(INDIAN_CITIES);
@@ -97,14 +173,89 @@ function App() {
     }
   };
 
-  // Price Prediction Form
-  const [priceInput, setPriceInput] = useState<PricePredictionInput>({ commodity: "", market: "", date: "" });
+  // Price Prediction Form (area-wise selection)
+  const [priceInput, setPriceInput] = useState<PricePredictionInput>({ state: "", district: "", market: "", commodity: "" });
   const [priceResult, setPriceResult] = useState<string>("");
   const [pricePredicting, setPricePredicting] = useState(false);
   const [pricePredictError, setPricePredictError] = useState("");
+  const [priceSelectedState, setPriceSelectedState] = useState("");
+  const [priceSelectedDistrict, setPriceSelectedDistrict] = useState("");
+  const [priceSelectedMarket, setPriceSelectedMarket] = useState("");
+  const [priceStateOptions, setPriceStateOptions] = useState<string[]>([]);
+  const [priceDistrictOptions, setPriceDistrictOptions] = useState<string[]>([]);
+  const [priceMarketOptions, setPriceMarketOptions] = useState<string[]>([]);
+  const [priceCommodityOptions, setPriceCommodityOptions] = useState<string[]>([]);
+
+  // Fetch all states for price prediction on mount
+  useEffect(() => {
+    fetch(`${API}/available-areas`)
+      .then(res => res.json())
+      .then(data => {
+        setPriceStateOptions(data.states || []);
+      });
+  }, []);
+
+  // Update districts when state changes
+  useEffect(() => {
+    if (priceSelectedState) {
+      fetch(`${API}/area-commodities?state=${encodeURIComponent(priceSelectedState)}`)
+        .then(res => res.json())
+        .then(data => {
+          setPriceDistrictOptions(data.districts || []);
+          setPriceSelectedDistrict("");
+          setPriceMarketOptions([]);
+          setPriceSelectedMarket("");
+          setPriceCommodityOptions([]);
+          setPriceInput({ ...priceInput, state: priceSelectedState, district: "", market: "", commodity: "" });
+        });
+    } else {
+      setPriceDistrictOptions([]);
+      setPriceSelectedDistrict("");
+      setPriceMarketOptions([]);
+      setPriceSelectedMarket("");
+      setPriceCommodityOptions([]);
+      setPriceInput({ ...priceInput, state: "", district: "", market: "", commodity: "" });
+    }
+  }, [priceSelectedState]);
+
+  // Update markets when district changes
+  useEffect(() => {
+    if (priceSelectedState && priceSelectedDistrict) {
+      fetch(`${API}/area-commodities?state=${encodeURIComponent(priceSelectedState)}&district=${encodeURIComponent(priceSelectedDistrict)}`)
+        .then(res => res.json())
+        .then(data => {
+          setPriceMarketOptions(data.markets || []);
+          setPriceSelectedMarket("");
+          setPriceCommodityOptions([]);
+          setPriceInput({ ...priceInput, district: priceSelectedDistrict, market: "", commodity: "" });
+        });
+    } else {
+      setPriceMarketOptions([]);
+      setPriceSelectedMarket("");
+      setPriceCommodityOptions([]);
+      setPriceInput({ ...priceInput, district: "", market: "", commodity: "" });
+    }
+  }, [priceSelectedDistrict, priceSelectedState]);
+
+  // Update commodities when market changes
+  useEffect(() => {
+    if (priceSelectedState && priceSelectedDistrict && priceSelectedMarket) {
+      fetch(`${API}/area-commodities?state=${encodeURIComponent(priceSelectedState)}&district=${encodeURIComponent(priceSelectedDistrict)}&market=${encodeURIComponent(priceSelectedMarket)}`)
+        .then(res => res.json())
+        .then(data => {
+          setPriceCommodityOptions(data.commodities || []);
+          setPriceInput({ ...priceInput, market: priceSelectedMarket, commodity: "" });
+        });
+    } else {
+      setPriceCommodityOptions([]);
+      setPriceInput({ ...priceInput, market: "", commodity: "" });
+    }
+  }, [priceSelectedMarket, priceSelectedDistrict, priceSelectedState]);
+
   const handlePriceInput = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setPriceInput({ ...priceInput, [e.target.name]: e.target.value });
   };
+
   const handlePriceSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setPricePredicting(true);
@@ -332,23 +483,34 @@ function App() {
             <h2 style={{ marginTop: 0 }}>Market Analysis</h2>
             <form onSubmit={handleMarketSubmit} style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
               <label>
+                State:
+                <select value={selectedState} onChange={e => { setSelectedState(e.target.value); setSelectedDistrict(""); setSelectedMarket(""); setMarketInput({ ...marketInput, market: "", commodity: "" }); }} required style={{ marginLeft: 4 }}>
+                  <option value="">Select</option>
+                  {stateOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+              </label>
+              <label>
+                District:
+                <select value={selectedDistrict} onChange={e => { setSelectedDistrict(e.target.value); setSelectedMarket(""); setMarketInput({ ...marketInput, market: "", commodity: "" }); }} required style={{ marginLeft: 4 }}>
+                  <option value="">Select</option>
+                  {districtOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+              </label>
+              <label>
+                Market:
+                <select name="market" value={marketInput.market} onChange={e => { handleMarketInput(e); setSelectedMarket(e.target.value); setMarketInput({ ...marketInput, market: e.target.value, commodity: "" }); }} required style={{ marginLeft: 4 }}>
+                  <option value="">Select</option>
+                  {marketOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+              </label>
+              <label>
                 Commodity:
                 <select name="commodity" value={marketInput.commodity} onChange={handleMarketInput} required style={{ marginLeft: 4 }}>
                   <option value="">Select</option>
                   {commodityOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                 </select>
               </label>
-              <label>
-                Market:
-                <select name="market" value={marketInput.market} onChange={handleMarketInput} required style={{ marginLeft: 4 }}>
-                  <option value="">Select</option>
-                  {marketOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                </select>
-              </label>
-              <label>
-                Date:
-                <input name="date" type="date" value={marketInput.date} onChange={handleMarketInput} required style={{ marginLeft: 4 }} />
-              </label>
+              {/* Date field removed */}
               <button type="submit" disabled={marketPredicting} style={{ padding: "4px 12px", background: "#4caf50", color: "#fff", border: "none", borderRadius: 4, fontWeight: 500 }}>
                 {marketPredicting ? "Analysing..." : "Analyse"}
               </button>
@@ -362,22 +524,32 @@ function App() {
             <h2 style={{ marginTop: 0 }}>Price Prediction</h2>
             <form onSubmit={handlePriceSubmit} style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
               <label>
-                Commodity:
-                <select name="commodity" value={priceInput.commodity} onChange={handlePriceInput} required style={{ marginLeft: 4 }}>
+                State:
+                <select value={priceSelectedState} onChange={e => { setPriceSelectedState(e.target.value); setPriceSelectedDistrict(""); setPriceSelectedMarket(""); setPriceInput({ ...priceInput, state: e.target.value, district: "", market: "", commodity: "" }); }} required style={{ marginLeft: 4 }}>
                   <option value="">Select</option>
-                  {commodityOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                  {priceStateOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+              </label>
+              <label>
+                District:
+                <select value={priceSelectedDistrict} onChange={e => { setPriceSelectedDistrict(e.target.value); setPriceSelectedMarket(""); setPriceInput({ ...priceInput, district: e.target.value, market: "", commodity: "" }); }} required style={{ marginLeft: 4 }}>
+                  <option value="">Select</option>
+                  {priceDistrictOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                 </select>
               </label>
               <label>
                 Market:
-                <select name="market" value={priceInput.market} onChange={handlePriceInput} required style={{ marginLeft: 4 }}>
+                <select value={priceSelectedMarket} onChange={e => { setPriceSelectedMarket(e.target.value); setPriceInput({ ...priceInput, market: e.target.value, commodity: "" }); }} required style={{ marginLeft: 4 }}>
                   <option value="">Select</option>
-                  {marketOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                  {priceMarketOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                 </select>
               </label>
               <label>
-                Date:
-                <input name="date" type="date" value={priceInput.date} onChange={handlePriceInput} required style={{ marginLeft: 4 }} />
+                Commodity:
+                <select name="commodity" value={priceInput.commodity} onChange={handlePriceInput} required style={{ marginLeft: 4 }}>
+                  <option value="">Select</option>
+                  {priceCommodityOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
               </label>
               <button type="submit" disabled={pricePredicting} style={{ padding: "4px 12px", background: "#4caf50", color: "#fff", border: "none", borderRadius: 4, fontWeight: 500 }}>
                 {pricePredicting ? "Predicting..." : "Predict"}
@@ -506,12 +678,12 @@ export default App;
 type MarketAnalysisInput = {
   commodity: string;
   market: string;
-  date: string;
 };
 type PricePredictionInput = {
-  commodity: string;
+  state?: string;
+  district?: string;
   market: string;
-  date: string;
+  commodity: string;
 };
 type WeatherAdvisoryInput = {
   location: string;
@@ -521,3 +693,4 @@ type CropInfoInput = {
   crop: string;
 };
 
+// No login page or authentication is required for this application. All features are public and do not require user accounts.
